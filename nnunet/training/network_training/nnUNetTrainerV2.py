@@ -233,8 +233,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
         data = data_dict['data']
         target = data_dict['target']
 
-        data = maybe_to_torch(data)
-        target = maybe_to_torch(target)
+        data = maybe_to_torch(data) # GK: data is [12,1,512,512] and 12 batch size becuase of 12 processes perhaps
+        target = maybe_to_torch(target) # GK: DOUBT: why target is tuple of len 7 and each object is [12,1,512,512] -> 256,128,...,8
 
         if torch.cuda.is_available():
             data = to_cuda(data)
@@ -244,7 +244,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         if self.fp16:
             with autocast():
-                output = self.network(data)
+                output = self.network(data) # GK: DOUBT: why output is tuple of len 7 and objects as [12,3,512,512] -> 256,128,...,8
                 del data
                 l = self.loss(output, target)
 
