@@ -52,6 +52,8 @@ def main():
     parser.add_argument("--verify_dataset_integrity", required=False, default=False, action="store_true",
                         help="set this flag to check the dataset integrity. This is useful and should be done once for "
                              "each dataset!")
+    parser.add_argument("--target", required=False, default=False, action="store_true",
+                        help="if set, ignore cropping for segmentations")
 
     args = parser.parse_args()
     task_ids = args.task_ids
@@ -60,6 +62,9 @@ def main():
     tf = args.tf
     planner_name3d = args.planner3d
     planner_name2d = args.planner2d
+
+    # GK: args.target for pre-processing on target images
+    target = args.target
 
     if planner_name3d == "None":
         planner_name3d = None
@@ -76,7 +81,8 @@ def main():
         if args.verify_dataset_integrity:
             verify_dataset_integrity(join(nnUNet_raw_data, task_name))
 
-        crop(task_name, False, tf)
+        # GK: change for target
+        crop(task_name, False, tf, target)
 
         tasks.append(task_name)
 
@@ -125,12 +131,13 @@ def main():
             exp_planner = planner_3d(cropped_out_dir, preprocessing_output_dir_this_task)
             exp_planner.plan_experiment()
             if not dont_run_preprocessing:  # double negative, yooo
-                exp_planner.run_preprocessing(threads)
+                # GK: change for target:
+                exp_planner.run_preprocessing(threads, target)
         if planner_2d is not None:
             exp_planner = planner_2d(cropped_out_dir, preprocessing_output_dir_this_task)
             exp_planner.plan_experiment()
             if not dont_run_preprocessing:  # double negative, yooo
-                exp_planner.run_preprocessing(threads)
+                exp_planner.run_preprocessing(threads, target)
 
 
 if __name__ == "__main__":

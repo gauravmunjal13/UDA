@@ -79,7 +79,7 @@ def split_4d(input_folder, num_processes=default_num_threads, overwrite_task_out
     shutil.copy(join(input_folder, "dataset.json"), output_folder)
 
 
-def create_lists_from_splitted_dataset(base_folder_splitted):
+def create_lists_from_splitted_dataset(base_folder_splitted, target=False):
     lists = []
 
     json_file = join(base_folder_splitted, "dataset.json")
@@ -92,7 +92,15 @@ def create_lists_from_splitted_dataset(base_folder_splitted):
         for mod in range(num_modalities):
             cur_pat.append(join(base_folder_splitted, "imagesTr", tr['image'].split("/")[-1][:-7] +
                                 "_%04.0d.nii.gz" % mod))
-        cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1]))
+
+        # GK: change for target
+        if target:
+            label_file = join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1])
+            if isfile(label_file):
+                cur_pat.append(label_file)
+        else: # GK: default way
+            cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1]))
+
         lists.append(cur_pat)
     return lists, {int(i): d['modality'][str(i)] for i in d['modality'].keys()}
 
@@ -119,7 +127,7 @@ def get_caseIDs_from_splitted_dataset_folder(folder):
     return files
 
 
-def crop(task_string, override=False, num_threads=default_num_threads):
+def crop(task_string, override=False, num_threads=default_num_threads, target=False):
     cropped_out_dir = join(nnUNet_cropped_data, task_string)
     maybe_mkdir_p(cropped_out_dir)
 
@@ -128,10 +136,13 @@ def crop(task_string, override=False, num_threads=default_num_threads):
         maybe_mkdir_p(cropped_out_dir)
 
     splitted_4d_output_dir_task = join(nnUNet_raw_data, task_string)
-    lists, _ = create_lists_from_splitted_dataset(splitted_4d_output_dir_task)
+    # GK: change for target: don't add labels to the lists
+    lists, _ = create_lists_from_splitted_dataset(splitted_4d_output_dir_task, target)
+    print("GK: lists", lists)
 
     imgcrop = ImageCropper(num_threads, cropped_out_dir)
-    imgcrop.run_cropping(lists, overwrite_existing=override)
+     # GK: change for target: don't save gt annotations for the target
+    imgcrop.run_cropping(lists, overwrite_existing=override, target=target)
     shutil.copy(join(nnUNet_raw_data, task_string, "dataset.json"), cropped_out_dir)
 
 

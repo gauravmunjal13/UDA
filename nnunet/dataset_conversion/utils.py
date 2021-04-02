@@ -73,3 +73,24 @@ def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str
         print("WARNING: output file name is not dataset.json! This may be intentional or not. You decide. "
               "Proceeding anyways...")
     save_json(json_dict, os.path.join(output_file))
+
+if __name__ == "__main__":
+    #output_file = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/dataset.json'
+    output_file = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/dataset.json'
+
+    #imagesTr_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/imagesTr'
+    imagesTr_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/imagesTr'
+
+    #imagesTs_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/imagesTs'
+    imagesTs_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/imagesTs'
+
+    modalities = ('CT')
+    labels = {0: 'background',  1:'pancreas', 2:'cancer'}
+    #dataset_name = 'Pancreas'
+    dataset_name = 'PancreasTarget'
+    #license = 'CC-BY-SA 4.0'
+    dataset_description = 'Pancreas and cancer segmentation'
+    dataset_reference = 'Memorial Sloan Kettering Cancer Center '
+    #dataset_release = '1.0 04/05/2018'
+    generate_dataset_json(output_file=output_file, imagesTr_dir=imagesTr_dir, imagesTs_dir=imagesTs_dir, modalities=modalities,
+    labels=labels, dataset_name=dataset_name, dataset_description=dataset_description, dataset_reference=dataset_reference)

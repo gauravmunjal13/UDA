@@ -18,6 +18,7 @@ import shutil
 from batchgenerators.utilities.file_and_folder_operations import *
 from multiprocessing import Pool
 from collections import OrderedDict
+import re
 
 
 def create_nonzero_mask(data):
@@ -58,7 +59,7 @@ def get_case_identifier_from_npz(case):
     return case_identifier
 
 
-def load_case_from_list_of_files(data_files, seg_file=None):
+def load_case_from_list_of_files(data_files, seg_file=None, label=None):
     assert isinstance(data_files, list) or isinstance(data_files, tuple), "case must be either a list or a tuple"
     properties = OrderedDict()
     data_itk = [sitk.ReadImage(f) for f in data_files]
@@ -71,6 +72,10 @@ def load_case_from_list_of_files(data_files, seg_file=None):
     properties["itk_origin"] = data_itk[0].GetOrigin()
     properties["itk_spacing"] = data_itk[0].GetSpacing()
     properties["itk_direction"] = data_itk[0].GetDirection()
+
+    # GK: change for target:
+    if label is not None:
+        properties["label"] = label
 
     data_npy = np.vstack([sitk.GetArrayFromImage(d)[None] for d in data_itk])
     if seg_file is not None:
@@ -150,18 +155,35 @@ class ImageCropper(object):
         return data, seg, properties
 
     @staticmethod
-    def crop_from_list_of_files(data_files, seg_file=None):
-        data, seg, properties = load_case_from_list_of_files(data_files, seg_file)
+    def crop_from_list_of_files(data_files, seg_file=None, label=None):
+        data, seg, properties = load_case_from_list_of_files(data_files, seg_file, label)
         return ImageCropper.crop(data, properties, seg)
 
-    def load_crop_save(self, case, case_identifier, overwrite_existing=False):
+    def load_crop_save(self, case, case_identifier, overwrite_existing=False, target=False):
         try:
             print(case_identifier)
+
+            # GK: change for target
+            if target:
+                case_id_int = int(re.findall(r'-?\d+\.?\d*',case_identifier)[0])
+                if case_id_int == 12:
+                    label = 1 # target
+                else:
+                    label = 0 # source
+
             if overwrite_existing \
                     or (not os.path.isfile(os.path.join(self.output_folder, "%s.npz" % case_identifier))
                         or not os.path.isfile(os.path.join(self.output_folder, "%s.pkl" % case_identifier))):
 
-                data, seg, properties = self.crop_from_list_of_files(case[:-1], case[-1])
+                # GK: change for target:
+                if target:
+                    if label == 1: # no seg file for target
+                        # seg will be created if None by crop_to_nonzero() having -1 and 0, no class labels
+                        data, seg, properties = self.crop_from_list_of_files(case, seg_file=None, label=label)
+                    else: # label == 0:
+                        data, seg, properties = self.crop_from_list_of_files(case[:-1], seg_file=case[-1], label=label)
+                else: # defualt case
+                    data, seg, properties = self.crop_from_list_of_files(case[:-1], case[-1], label=None)
 
                 all_data = np.vstack((data, seg))
                 np.savez_compressed(os.path.join(self.output_folder, "%s.npz" % case_identifier), data=all_data)
@@ -178,7 +200,7 @@ class ImageCropper(object):
     def get_patient_identifiers_from_cropped_files(self):
         return [i.split("/")[-1][:-4] for i in self.get_list_of_cropped_files()]
 
-    def run_cropping(self, list_of_files, overwrite_existing=False, output_folder=None):
+    def run_cropping(self, list_of_files, overwrite_existing=False, output_folder=None, target=False):
         """
         also copied ground truth nifti segmentation into the preprocessed folder so that we can use them for evaluation
         on the cluster
@@ -193,14 +215,18 @@ class ImageCropper(object):
         output_folder_gt = os.path.join(self.output_folder, "gt_segmentations")
         maybe_mkdir_p(output_folder_gt)
         for j, case in enumerate(list_of_files):
-            if case[-1] is not None:
+            # GK: case[-1] is the label so it is assumed that the labels are provided, changing the default implementation
+            # if case[-1] is not None: 
+            if 'labelsTr' in case[-1]: # GK: now it means if the labels file is provided in the case list
                 shutil.copy(case[-1], output_folder_gt)
 
         list_of_args = []
         for j, case in enumerate(list_of_files):
             case_identifier = get_case_identifier(case)
-            list_of_args.append((case, case_identifier, overwrite_existing))
-
+            # GK: change for target: 
+            list_of_args.append((case, case_identifier, overwrite_existing, target))
+            
+        #print("GK: list_of_args:", list_of_args)
         p = Pool(self.num_threads)
         p.starmap(self.load_crop_save, list_of_args)
         p.close()
