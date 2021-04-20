@@ -163,10 +163,10 @@ class ImageCropper(object):
         try:
             print(case_identifier)
 
-            # GK: change for target
+            # GK: change for target: This is important
             if target:
                 case_id_int = int(re.findall(r'-?\d+\.?\d*',case_identifier)[0])
-                if case_id_int == 12:
+                if case_id_int >= 100000:
                     label = 1 # target
                 else:
                     label = 0 # source

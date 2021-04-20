@@ -131,13 +131,13 @@ def main():
             exp_planner = planner_3d(cropped_out_dir, preprocessing_output_dir_this_task)
             exp_planner.plan_experiment()
             if not dont_run_preprocessing:  # double negative, yooo
-                # GK: change for target:
-                exp_planner.run_preprocessing(threads, target)
+                # GK: change for target: nothing yet
+                exp_planner.run_preprocessing(threads)
         if planner_2d is not None:
             exp_planner = planner_2d(cropped_out_dir, preprocessing_output_dir_this_task)
             exp_planner.plan_experiment()
             if not dont_run_preprocessing:  # double negative, yooo
-                exp_planner.run_preprocessing(threads, target)
+                exp_planner.run_preprocessing(threads)
 
 
 if __name__ == "__main__":

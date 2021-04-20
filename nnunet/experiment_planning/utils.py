@@ -138,7 +138,7 @@ def crop(task_string, override=False, num_threads=default_num_threads, target=Fa
     splitted_4d_output_dir_task = join(nnUNet_raw_data, task_string)
     # GK: change for target: don't add labels to the lists
     lists, _ = create_lists_from_splitted_dataset(splitted_4d_output_dir_task, target)
-    print("GK: lists", lists)
+    #print("GK: lists", lists)
 
     imgcrop = ImageCropper(num_threads, cropped_out_dir)
      # GK: change for target: don't save gt annotations for the target

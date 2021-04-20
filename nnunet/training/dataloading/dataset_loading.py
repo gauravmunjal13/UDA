@@ -382,7 +382,7 @@ class DataLoader3D(SlimDataLoaderBase):
 class DataLoader2D(SlimDataLoaderBase):
     def __init__(self, data, patch_size, final_patch_size, batch_size, oversample_foreground_percent=0.0,
                  memmap_mode="r", pseudo_3d_slices=1, pad_mode="edge",
-                 pad_kwargs_data=None, pad_sides=None):
+                 pad_kwargs_data=None, pad_sides=None, target=None):
         """
         This is the basic data loader for 2D networks. It uses preprocessed data as produced by my (Fabian) preprocessing.
         You can load the data with load_dataset(folder) where folder is the folder where the npz files are located. If there
@@ -407,6 +407,7 @@ class DataLoader2D(SlimDataLoaderBase):
         :param random: sample randomly; CAREFUL! non-random sampling requires batch_size=1, otherwise you will iterate batch_size times over the dataset
         :param pseudo_3d_slices: 7 = 3 below and 3 above the center slice
         """
+        # GK: here, the data is saved in the parent class as self._data
         super(DataLoader2D, self).__init__(data, batch_size, None)
         if pad_kwargs_data is None:
             pad_kwargs_data = OrderedDict()
@@ -425,6 +426,8 @@ class DataLoader2D(SlimDataLoaderBase):
             self.need_to_pad += pad_sides
         self.pad_sides = pad_sides
         self.data_shape, self.seg_shape = self.determine_shapes()
+        # GK: change for target
+        self.target = target
 
     def determine_shapes(self):
         num_seg = 1
@@ -443,6 +446,7 @@ class DataLoader2D(SlimDataLoaderBase):
         return not batch_idx < round(self.batch_size * (1 - self.oversample_foreground_percent))
 
     def generate_train_batch(self):
+        #print("GK: generate_train_batch() in dataset_loading.py called")
         selected_keys = np.random.choice(self.list_of_keys, self.batch_size, True, None)
 
         data = np.zeros(self.data_shape, dtype=np.float32)
@@ -460,6 +464,18 @@ class DataLoader2D(SlimDataLoaderBase):
                 force_fg = True
             else:
                 force_fg = False
+            
+            # GK: with batch size = 1 for adversarial training, the self.get_do_oversample(0) always be false forcing force_fg = False;
+            # with adversarial training, for source, we can set force_fg at random and for target, set force_fg = False
+            # before: see what happens for target image
+            if self.target:
+                if self._data[i]['properties']['label'] == 0:
+                    # source
+                    force_fg = np.random.choice([True, False])
+                else:
+                    # target: no class locations known thus are stored as: 'class_locations':{1: [], 2: []}
+                    # thus even if we set it True, the following code takes the random slice
+                    force_fg = False
 
             if not isfile(self._data[i]['data_file'][:-4] + ".npy"):
                 # lets hope you know what you're doing
@@ -549,6 +565,7 @@ class DataLoader2D(SlimDataLoaderBase):
                 bbox_x_lb = np.random.randint(lb_x, ub_x + 1)
                 bbox_y_lb = np.random.randint(lb_y, ub_y + 1)
             else:
+                #print("GK: dataset_loading.py: to see if class loacations are used for patching")
                 # this saves us a np.unique. Preprocessing already did that for all cases. Neat.
                 selected_voxel = voxels_of_that_class[np.random.choice(len(voxels_of_that_class))]
                 # selected voxel is center voxel. Subtract half the patch size to get lower bbox voxel.

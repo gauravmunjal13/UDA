@@ -315,6 +315,7 @@ class GenericPreprocessor(object):
 
     def _run_internal(self, target_spacing, case_identifier, output_folder_stage, cropped_output_dir, force_separate_z,
                       all_classes):
+        #print("GK: case identifier", case_identifier)
         data, seg, properties = self.load_cropped(cropped_output_dir, case_identifier)
 
         data = data.transpose((0, *[i + 1 for i in self.transpose_forward]))

@@ -76,16 +76,28 @@ class NetworkTrainer(object):
         self.lr_scheduler = None
         self.tr_gen = self.val_gen = None
         self.was_initialized = False
+        # GK: change for target
+        self.target_gen = None
+        self.d_aux = None
+        self.d_main = None
+        self.optimizer_d_aux = None
+        self.optimizer_d_main = None
+        self.interp_target_256 = None
 
         ################# SET THESE IN INIT ################################################
         self.output_folder = None
         self.fold = None
         self.loss = None
         self.dataset_directory = None
+        # GK: change for target
+        self.target = None
 
         ################# SET THESE IN LOAD_DATASET OR DO_SPLIT ############################
         self.dataset = None  # these can be None for inference mode
         self.dataset_tr = self.dataset_val = None  # do not need to be used, they just appear if you are using the suggested load_dataset_and_do_split
+        # GK: change for target:
+        self.dataset_target = None
+        self.dl_target = None
 
         ################# THESE DO NOT NECESSARILY NEED TO BE MODIFIED #####################
         self.patience = 50
@@ -94,11 +106,14 @@ class NetworkTrainer(object):
         # too high the training will take forever
         self.train_loss_MA_alpha = 0.93  # alpha * old + (1-alpha) * new
         self.train_loss_MA_eps = 5e-4  # new MA must be at least this much better (smaller)
-        self.max_num_epochs = 1000
+        self.max_num_epochs = 100
         self.num_batches_per_epoch = 250
         self.num_val_batches_per_epoch = 50
         self.also_val_in_tr_mode = False
         self.lr_threshold = 1e-6  # the network will not terminate training if the lr is still above this threshold
+        # GK: change for target:
+        self.i_iter = None # to know the current iteration
+        # what if I define it not here rather the child class: it's an error as parent can't access this chil object vars
 
         ################# LEAVE THESE ALONE ################################################
         self.val_eval_criterion_MA = None
@@ -416,6 +431,9 @@ class NetworkTrainer(object):
 
         _ = self.tr_gen.next()
         _ = self.val_gen.next()
+        # GK: change for target
+        if self.target:
+            _ = self.target_gen.next()
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -433,6 +451,7 @@ class NetworkTrainer(object):
         if not self.was_initialized:
             self.initialize(True)
 
+        print("GK: self.max_num_epochs=", self.max_num_epochs)
         while self.epoch < self.max_num_epochs:
             self.print_to_log_file("\nepoch: ", self.epoch)
             epoch_start_time = time()
@@ -440,8 +459,13 @@ class NetworkTrainer(object):
 
             # train one epoch
             self.network.train()
+            if self.target:
+                self.d_aux.train()
+                self.d_main.train()
 
             if self.use_progress_bar:
+                if self.target:
+                    print("GK: use_progress_bar is assumed to be false for adversarial training")
                 with trange(self.num_batches_per_epoch) as tbar:
                     for b in tbar:
                         tbar.set_description("Epoch {}/{}".format(self.epoch+1, self.max_num_epochs))
@@ -451,7 +475,9 @@ class NetworkTrainer(object):
                         tbar.set_postfix(loss=l)
                         train_losses_epoch.append(l)
             else:
-                for _ in range(self.num_batches_per_epoch):
+                for i in range(self.num_batches_per_epoch):
+                    # GK: perhaps can directly refer the self.target_gen in the run_iteration
+                    self.i_iter = (i)+(self.epoch*self.num_batches_per_epoch) # setting as class var so no need to change the function definition
                     l = self.run_iteration(self.tr_gen, True)
                     train_losses_epoch.append(l)
 
@@ -468,7 +494,7 @@ class NetworkTrainer(object):
                 self.all_val_losses.append(np.mean(val_losses))
                 self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
 
-                if self.also_val_in_tr_mode:
+                if self.also_val_in_tr_mode: # GK: it' False
                     self.network.train()
                     # validation with train=True
                     val_losses = []
@@ -486,6 +512,7 @@ class NetworkTrainer(object):
 
             if not continue_training:
                 # allows for early stopping
+                print("GK: ******* early stopping *******")
                 break
 
             self.epoch += 1
@@ -607,7 +634,7 @@ class NetworkTrainer(object):
 
         self.plot_progress()
 
-        self.maybe_update_lr()
+        self.maybe_update_lr() # GK: calls the one in nnUNetTrainerV2.py
 
         self.maybe_save_checkpoint()
 

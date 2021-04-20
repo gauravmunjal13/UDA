@@ -89,10 +89,15 @@ def main():
                         help='path to nnU-Net checkpoint file to be used as pretrained model (use .model '
                              'file, for example model_final_checkpoint.model). Will only be used when actually training. '
                              'Optional. Beta. Use with caution.')
+    parser.add_argument('--target', required=False, default=False, action="store_true",
+                        help='flag for the adversarial framework')
 
     args = parser.parse_args()
 
     task = args.task
+    # GK: change for target: if not specified, the default value is None
+    target = args.target
+
     fold = args.fold
     network = args.network
     network_trainer = args.network_trainer
@@ -148,10 +153,11 @@ def main():
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
 
+    # GK: change for target
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
-                            fp16=run_mixed_precision)
+                            fp16=run_mixed_precision, target=target)
     if args.disable_saving:
         trainer.save_final_checkpoint = False # whether or not to save the final checkpoint
         trainer.save_best_checkpoint = False  # whether or not to save the best checkpoint according to
@@ -160,6 +166,8 @@ def main():
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
 
+    # GK: change for target: no need to pass target, can refer it as class var (self.target); 
+    # becuase changing here will have to change for all the trainer classes
     trainer.initialize(not validation_only)
 
     if find_lr:

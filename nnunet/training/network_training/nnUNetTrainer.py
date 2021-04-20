@@ -47,7 +47,7 @@ matplotlib.use("agg")
 
 class nnUNetTrainer(NetworkTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
-                 unpack_data=True, deterministic=True, fp16=False):
+                 unpack_data=True, deterministic=True, fp16=False, target=None):
         """
         :param deterministic:
         :param fold: can be either [0 ... 5) for cross-validation, 'all' to train on all available training data or
@@ -84,6 +84,8 @@ class nnUNetTrainer(NetworkTrainer):
         self.dataset_directory = dataset_directory
         self.output_folder_base = self.output_folder
         self.fold = fold
+        # GK: change for target
+        self.target = target
 
         self.plans = None
 
@@ -334,6 +336,13 @@ class nnUNetTrainer(NetworkTrainer):
         self.plans = plans
 
         stage_plans = self.plans['plans_per_stage'][self.stage]
+        # GK: change for target: make expilicitly the batch size 1 for adversarial training;
+        # changing "plans" here will also change the "self.plans" as well;
+        # rather change in the preprocess part
+        if self.target:
+            #stage_plans['batch_size'] = 2
+            print("GK: batch size changed to=", stage_plans['batch_size'])
+
         self.batch_size = stage_plans['batch_size']
         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
         self.patch_size = np.array(stage_plans['patch_size']).astype(int)
@@ -398,6 +407,7 @@ class nnUNetTrainer(NetworkTrainer):
 
     def get_basic_generators(self):
         self.load_dataset()
+        # GK: change for target
         self.do_split()
 
         if self.threeD:
@@ -410,10 +420,19 @@ class nnUNetTrainer(NetworkTrainer):
         else:
             dl_tr = DataLoader2D(self.dataset_tr, self.basic_generator_patch_size, self.patch_size, self.batch_size,
                                  oversample_foreground_percent=self.oversample_foreground_percent,
-                                 pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
+                                 pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r', target=self.target)
             dl_val = DataLoader2D(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,
                                   oversample_foreground_percent=self.oversample_foreground_percent,
-                                  pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
+                                  pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r', target=self.target)
+
+            # GK: change for target: add target data generator;
+            # at present adding as a self variable so to avoid changing the generic definition;
+            # this could be ideal as the returned values are also stored into the class variable
+            if self.target:
+                self.dl_target = DataLoader2D(self.dataset_target, self.basic_generator_patch_size, self.patch_size, self.batch_size,
+                                 oversample_foreground_percent=self.oversample_foreground_percent,
+                                 pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r', target=self.target)
+                                 
         return dl_tr, dl_val
 
     def preprocess_patient(self, input_files):
