@@ -51,7 +51,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16, target)
         # GK: Change the max_num_epochs here
-        self.max_num_epochs = 100
+        self.max_num_epochs = 1000
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -289,6 +289,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         :param run_online_evaluation:
         :return:
         """
+        # GK: don't get confuse with target here. It means label. While I referred target as data coming from Henry Ford
         data_dict = next(data_generator)
         data = data_dict['data']
         target = data_dict['target']
@@ -308,7 +309,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
             target_data_dict = next(self.target_gen)
             target_data = target_data_dict['data']
             #print("GK: target case:", target_data_dict['keys'])
-            assert target_data_dict['properties'][0]['label'] == 1 # I think 0 is the stage
+            # label is 1 for target cases and 0 for source
+            assert target_data_dict['properties'][0]['label'] == 1 # I think 0 (in ['properties'][0]) is the stage
             target_data = maybe_to_torch(target_data)
             if torch.cuda.is_available():
                 target_data = to_cuda(target_data)
@@ -317,7 +319,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             self.optimizer_d_main.zero_grad()
 
             # GK: adjust learning rate if required, doing only for discriminator, expecting nnUNet takes care of itself
-            # like a scheduler
+            # like for scheduler
             adjust_learning_rate_discriminator(self.optimizer_d_aux, self.learning_rate_D, self.i_iter, self.max_iters, self.power)
             adjust_learning_rate_discriminator(self.optimizer_d_main, self.learning_rate_D, self.i_iter, self.max_iters, self.power)
 
@@ -410,9 +412,9 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
                 if self.i_iter % self.num_batches_per_epoch == 0 and self.i_iter != 0:
                     # print at epoch end
-                    print("Segmentation loss:", l)
-                    print("Adversarial target loss: aux, main:", loss_adv_trg_aux, loss_adv_trg_main)
-                    print("Discriminator loss: aux, main:", loss_d_aux, loss_d_main)
+                    self.print_to_log_file("Segmentation loss:", l)
+                    self.print_to_log_file("Adversarial target loss: aux, main:", loss_adv_trg_aux, loss_adv_trg_main)
+                    self.print_to_log_file("Discriminator loss: aux, main:", loss_d_aux, loss_d_main)
 
         if run_online_evaluation:
             self.run_online_evaluation(output, target)
@@ -503,6 +505,25 @@ class nnUNetTrainerV2(nnUNetTrainer):
             
             if self.fold == 'all': # Presently, in this framework, only writing for fold 'all', no kfold
                 source_tr_keys = source_val_keys = source_keys
+            elif self.fold < 5:
+                # could have referred and saved splits, just creating every time with a same random seed
+                self.print_to_log_file("Creating new 5-fold cross-validation split...")
+                splits = []
+                source_keys = np.sort(source_keys)
+                kfold = KFold(n_splits=5, shuffle=True, random_state=12345)
+                for i, (train_idx, test_idx) in enumerate(kfold.split(source_keys)):
+                    train_keys = np.array(source_keys)[train_idx]
+                    test_keys = np.array(source_keys)[test_idx]
+                    splits.append(OrderedDict())
+                    splits[-1]['train'] = train_keys
+                    splits[-1]['val'] = test_keys
+                
+                source_tr_keys = splits[self.fold]['train']
+                source_val_keys = splits[self.fold]['val']
+                self.print_to_log_file("This split has %d training and %d validation cases."
+                                    % (len(source_tr_keys), len(source_val_keys)))
+                print("GK: do_split(): source training cases:", source_tr_keys)
+                print("GK: do_split(): source validation cases:", source_val_keys)
             else:
                 # create a random 80:20 split for any other fold value
                 rnd = np.random.RandomState(seed=12345 + self.fold)

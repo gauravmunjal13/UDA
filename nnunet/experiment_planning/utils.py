@@ -96,7 +96,7 @@ def create_lists_from_splitted_dataset(base_folder_splitted, target=False):
         # GK: change for target
         if target:
             label_file = join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1])
-            if isfile(label_file):
+            if isfile(label_file): # because when training with target, label file doesn't exists for target files
                 cur_pat.append(label_file)
         else: # GK: default way
             cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1]))
