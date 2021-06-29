@@ -23,7 +23,8 @@ import re
 
 def create_nonzero_mask(data):
     from scipy.ndimage import binary_fill_holes
-    assert len(data.shape) == 4 or len(data.shape) == 3, "data must have shape (C, X, Y, Z) or shape (C, X, Y)"
+    #print("GK: data.shape", data.shape)
+    assert len(data.shape) == 4 or len(data.shape) == 3, f"data must have shape (C, X, Y, Z) or shape (C, X, Y): {data.shape}"
     nonzero_mask = np.zeros(data.shape[1:], dtype=bool)
     for c in range(data.shape[0]):
         this_mask = data[c] != 0

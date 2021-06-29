@@ -76,13 +76,16 @@ def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str
 
 if __name__ == "__main__":
     #output_file = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/dataset.json'
-    output_file = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task201_PancreasTarget/dataset.json'
+    #output_file = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task206_PancreasTarget1000PreTrnd/dataset.json'
+    output_file = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/dataset.json'
 
     #imagesTr_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/imagesTr'
-    imagesTr_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task201_PancreasTarget/imagesTr'
+    #imagesTr_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task206_PancreasTarget1000PreTrnd/imagesTr'
+    imagesTr_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/imagesTr'
 
     #imagesTs_dir = '/home/gauravmunjal14/nnUNet/nnunet/data/nnUNet_raw_data_base/nnUNet_raw_data/Task007_Pancreas/imagesTs'
-    imagesTs_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task201_PancreasTarget/imagesTs'
+    #imagesTs_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task206_PancreasTarget1000PreTrnd/imagesTs'
+    imagesTs_dir = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/nnUNet_raw_data_base/nnUNet_raw_data/Task101_PancreasTarget/imagesTs'
 
     modalities = ('CT')
     labels = {0: 'background',  1:'pancreas', 2:'cancer'}

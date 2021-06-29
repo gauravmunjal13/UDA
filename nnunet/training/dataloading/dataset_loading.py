@@ -86,7 +86,7 @@ def delete_npy(folder):
         os.remove(n)
 
 
-def load_dataset(folder, num_cases_properties_loading_threshold=1000):
+def load_dataset(folder, num_cases_properties_loading_threshold=10000):
     # we don't load the actual data but instead return the filename to the np file.
     print('loading dataset')
     case_identifiers = get_case_identifiers(folder)
@@ -102,6 +102,7 @@ def load_dataset(folder, num_cases_properties_loading_threshold=1000):
         if dataset[c].get('seg_from_prev_stage_file') is not None:
             dataset[c]['seg_from_prev_stage_file'] = join(folder, "%s_segs.npz" % c)
 
+    print(f"GK: len(case_identifiers):{len(case_identifiers)} <= num_cases_properties_loading_threshold:{num_cases_properties_loading_threshold}") 
     if len(case_identifiers) <= num_cases_properties_loading_threshold:
         print('loading all case properties')
         for i in dataset.keys():

@@ -289,6 +289,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
         :param run_online_evaluation:
         :return:
         """
+        # GK: GET THE BATCH
+
         # GK: don't get confuse with target here. It means label. While I referred target as data coming from Henry Ford
         data_dict = next(data_generator)
         data = data_dict['data']
@@ -329,9 +331,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
             for param in self.d_main.parameters():
                 param.requires_grad = False
 
+        # GK: TRAINING
 
         if self.fp16:
-            print("GK: nnUNetTrainerv2.py: adversarial training not done in fp16 branch")
+            #print("GK: nnUNetTrainerv2.py: adversarial training not done in fp16 branch")
             with autocast():
                 output = self.network(data) # GK: deep supervision: output is tuple of len 7 and objects as [12,3,512,512] -> 256,128,...,8
                 del data
@@ -339,11 +342,88 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
             if do_backprop:
                 self.amp_grad_scaler.scale(l).backward()
+                # GK: Unscale has to be done here if we are refering network parameters before optimizer step()
                 self.amp_grad_scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+                if not self.target:                    
+                    self.amp_grad_scaler.step(self.optimizer)
+                    self.amp_grad_scaler.update()
+
+            # GK: change for target: adversarial training to fool the discriminator
+            if self.target and do_backprop:
+                with autocast():
+                    target_output = self.network(target_data)
+                    del target_data
+                    # aux feature
+                    pred_trg_aux = self.interp_target_256(target_output[1]) # interpolate h,w from 256(aux) to 512; now it's a different reference
+                    d_out_aux = self.d_aux(prob_2_entropy(F.softmax(pred_trg_aux))) # [batch_size=1,num_classes=3,512,512] -> [1,1,16,16]
+                    loss_adv_trg_aux = bce_loss(d_out_aux, self.source_label)
+                    # main feature
+                    d_out_main = self.d_main(prob_2_entropy(F.softmax(target_output[0])))
+                    loss_adv_trg_main = bce_loss(d_out_main, self.source_label)
+                    loss = (self.LAMBDA_ADV_MAIN * loss_adv_trg_main
+                        + self.LAMBDA_ADV_AUX * loss_adv_trg_aux)
+                    loss = loss
+                
+                # scale loss
+                self.amp_grad_scaler.scale(loss).backward()
+
+                # Train discriminator networks:
+                # enable training mode on discriminator networks
+                for param in self.d_aux.parameters():
+                    param.requires_grad = True
+                for param in self.d_main.parameters():
+                    param.requires_grad = True
+
+                # train with source
+                with autocast():
+                    # aux:
+                    pred_src_aux = self.interp_target_256(output[1]) # detach here so not backpropagate gradients along this var
+                    pred_src_aux = pred_src_aux.detach()
+                    d_out_aux = self.d_aux(prob_2_entropy(F.softmax(pred_src_aux)))
+                    loss_d_aux = bce_loss(d_out_aux, self.source_label)
+                    loss_d_aux = loss_d_aux / 2
+                    #loss_d_aux.backward()
+                    # main:
+                    pred_src_main = output[0]
+                    pred_src_main = pred_src_main.detach()
+                    d_out_main = self.d_main(prob_2_entropy(F.softmax(pred_src_main)))
+                    loss_d_main = bce_loss(d_out_main, self.source_label)
+                    loss_d_main = loss_d_main / 2
+                    #loss_d_main.backward()
+                
+                # scale the loss
+                self.amp_grad_scaler.scale(loss_d_aux).backward()
+                self.amp_grad_scaler.scale(loss_d_main).backward()
+
+                # train with target
+                with autocast():
+                    # aux:
+                    pred_trg_aux = pred_trg_aux.detach() # already interpolated
+                    d_out_aux = self.d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
+                    loss_d_aux = bce_loss(d_out_aux, self.target_label)
+                    loss_d_aux = loss_d_aux / 2
+                    #loss_d_aux.backward()
+                    # main:
+                    pred_trg_main = target_output[0]
+                    pred_trg_main = pred_trg_main.detach()
+                    d_out_main = self.d_main(prob_2_entropy(F.softmax(pred_trg_main)))
+                    loss_d_main = bce_loss(d_out_main, self.target_label)
+                    loss_d_main = loss_d_main / 2
+                    #loss_d_main.backward()
+                
+                # scale the loss
+                self.amp_grad_scaler.scale(loss_d_aux).backward()
+                self.amp_grad_scaler.scale(loss_d_main).backward()
+
+                # GK: Though I am using a single scaler, so wondering if it's apt to have a one scale for 
+                # all the three optimizers. Can be checked using self.amp_grad_scaler.get_scale()
                 self.amp_grad_scaler.step(self.optimizer)
+                self.amp_grad_scaler.step(self.optimizer_d_aux)
+                self.amp_grad_scaler.step(self.optimizer_d_main)
                 self.amp_grad_scaler.update()
-        else: # GK: assuming it's go into this branch
+
+        else: # GK: fp32 training
             output = self.network(data)
             del data
             l = self.loss(output, target)
@@ -380,12 +460,15 @@ class nnUNetTrainerV2(nnUNetTrainer):
                 # train with source
                 # aux:
                 pred_src_aux = self.interp_target_256(output[1]) # detach here so not backpropagate gradients along this var
-                d_out_aux = self.d_aux(prob_2_entropy(F.softmax(pred_src_aux.detach())))
+                pred_src_aux = pred_src_aux.detach()
+                d_out_aux = self.d_aux(prob_2_entropy(F.softmax(pred_src_aux)))
                 loss_d_aux = bce_loss(d_out_aux, self.source_label)
                 loss_d_aux = loss_d_aux / 2
                 loss_d_aux.backward()
                 # main:
-                d_out_main = self.d_main(prob_2_entropy(F.softmax(output[0].detach())))
+                pred_src_main = output[0]
+                pred_src_main = pred_src_main.detach()
+                d_out_main = self.d_main(prob_2_entropy(F.softmax(pred_src_main)))
                 loss_d_main = bce_loss(d_out_main, self.source_label)
                 loss_d_main = loss_d_main / 2
                 loss_d_main.backward()
@@ -398,7 +481,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
                 loss_d_aux = loss_d_aux / 2
                 loss_d_aux.backward()
                 # main:
-                pred_trg_main = target_output[0].detach()
+                pred_trg_main = target_output[0]
+                pred_trg_main = pred_trg_main.detach()
                 d_out_main = self.d_main(prob_2_entropy(F.softmax(pred_trg_main)))
                 #print("GK: train discriminator networks for target", d_out_aux.shape, d_out_main.shape)
                 loss_d_main = bce_loss(d_out_main, self.target_label)
@@ -498,6 +582,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             target_keys = []
             # self.dataset contains all the cases from source and target combined
             for case in self.dataset.keys():
+                #print(f"GK: case:{case} and self.dataset[case]:{self.dataset[case]}")
                 if self.dataset[case]["properties"]["label"] == 0:
                     source_keys.append(case)
                 else: # label == 1

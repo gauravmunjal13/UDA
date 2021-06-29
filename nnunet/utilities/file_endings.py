@@ -30,5 +30,5 @@ def maybe_add_0000_to_all_niigz(folder):
             os.rename(n, n[:-7] + '_0000.nii.gz')
 
 if __name__ == '__main__':
-    folder = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/experiments/imagesTs'
+    folder = '/home/cse/staff/gaur91.cstaff/scratch/nnUNet_DATA/experiments/imagesValSub'
     maybe_add_0000_to_all_niigz(folder)
